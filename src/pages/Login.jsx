@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Sparkles, Lock, Mail, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { isFirebaseConfigured } from "../firebase";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -89,6 +90,14 @@ export default function Login() {
             Admin Authentication Console • v2.4
           </p>
         </div>
+
+        {/* Hosting Config Notice */}
+        {!isFirebaseConfigured && (
+          <div className="mb-5 p-3 rounded-lg bg-[#eab308]/15 border border-[#eab308]/40 text-xs text-[#fef08a] flex items-start gap-2 animate-fade-in">
+            <AlertCircle className="w-4 h-4 text-[#eab308] shrink-0 mt-0.5" />
+            <span>Hosting Notice: Firebase environment variables (VITE_FIREBASE_*) not set in hosting dashboard.</span>
+          </div>
+        )}
 
         {/* Error Alert */}
         {errorMsg && (
