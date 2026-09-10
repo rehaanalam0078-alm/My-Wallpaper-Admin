@@ -2,8 +2,6 @@
 
 A modern, production-ready admin panel for managing the **MyWallpaper** platform, built with React, Vite, Tailwind CSS, Firebase (Auth + Firestore), and Cloudinary.
 
-![Dashboard Preview](https://raw.githubusercontent.com/rehaanalam0078-alm/My-Wallpaper-Admin/main/preview.png)
-
 ## ✨ Features
 
 - **📊 Live Analytics Dashboard**: Dynamic real-time statistics aggregating all wallpapers, active categories, bandwidth, and category metrics directly from Cloud Firestore.
