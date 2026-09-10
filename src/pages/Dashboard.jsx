@@ -183,12 +183,12 @@ export default function Dashboard() {
           title="Storage CDN"
           value="Cloudinary"
           subtext="Direct edge delivery endpoint"
-          badgeText="dghtt3gk6"
+          badgeText={import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "Cloud CDN"}
           badgeColor="text-[#4cd7f6]"
           icon={HardDrive}
           footer={
             <>
-              <span>Preset: wallpaper_upload</span>
+              <span>Preset: {import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "Configured"}</span>
               <span className="text-[#4edea3]">Global Edge</span>
             </>
           }
@@ -369,7 +369,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-4">
           <span>Global Latency: <span className="text-[#4edea3]">24ms</span></span>
-          <span>Database: <span className="text-[#c0c1ff]">my-wallpaper-c9bf1</span></span>
+          <span>Database: <span className="text-[#c0c1ff]">{import.meta.env.VITE_FIREBASE_PROJECT_ID || "Connected"}</span></span>
         </div>
       </div>
 

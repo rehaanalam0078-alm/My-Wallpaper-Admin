@@ -177,7 +177,7 @@ export default function Login() {
         {/* Security Notice */}
         <div className="mt-8 pt-4 border-t border-[#2A374A]/60 flex items-center justify-between text-[11px] font-mono text-[#908fa0]">
           <span>Firebase Auth Secured</span>
-          <span className="text-[#4edea3]">Project: my-wallpaper-c9bf1</span>
+          <span className="text-[#4edea3]">Project: {import.meta.env.VITE_FIREBASE_PROJECT_ID || "Active"}</span>
         </div>
       </div>
     </div>

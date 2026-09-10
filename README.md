@@ -14,8 +14,7 @@ A modern, production-ready admin panel for managing the **MyWallpaper** platform
 ## 🛠️ Tech Stack
 
 - **Frontend**: React 19, Vite, Tailwind CSS, Lucide Icons, Google Material Symbols
-- **Backend & Database**: Firebase Authentication, Google Cloud Firestore
-- **Media CDN**: Cloudinary unsigned upload preset (`wallpaper_upload`)
+- **Media CDN**: Cloudinary unsigned upload preset
 - **Routing**: React Router v7
 
 ## 🚀 Getting Started

@@ -66,7 +66,7 @@ export default function Settings() {
             <div className="p-3 rounded-lg bg-[#151c25] border border-[#2A374A] space-y-2 font-mono text-xs">
               <div className="flex justify-between">
                 <span className="text-[#908fa0]">Project ID:</span>
-                <span className="text-[#c0c1ff] font-semibold">my-wallpaper-c9bf1</span>
+                <span className="text-[#c0c1ff] font-semibold">{import.meta.env.VITE_FIREBASE_PROJECT_ID || "Connected"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#908fa0]">Firestore Collection:</span>
@@ -103,11 +103,11 @@ export default function Settings() {
             <div className="p-3 rounded-lg bg-[#151c25] border border-[#2A374A] space-y-2 font-mono text-xs">
               <div className="flex justify-between">
                 <span className="text-[#908fa0]">Cloud Name:</span>
-                <span className="text-[#4cd7f6] font-semibold">dghtt3gk6</span>
+                <span className="text-[#4cd7f6] font-semibold">{import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "Configured"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#908fa0]">Upload Preset:</span>
-                <span className="text-[#dce3f0]">wallpaper_upload</span>
+                <span className="text-[#dce3f0]">{import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "Configured"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#908fa0]">Delivery Protocol:</span>
