@@ -86,22 +86,26 @@ export async function setFeaturedWallpaper(docId, isFeatured = true) {
       snap.forEach((d) => {
         if (d.id !== docId) {
           const prevRef = doc(db, WALLPAPERS_COLLECTION, d.id);
-          batch.set(prevRef, { isFeatured: false }, { merge: true });
+          batch.set(prevRef, { isFeatured: false, featured: false }, { merge: true });
         }
       });
     } catch (queryErr) {
       console.warn("Could not query isFeatured docs with where filter, checking all:", queryErr);
       const all = await fetchAllWallpapers();
-      const prevFeatured = all.filter((w) => w.isFeatured && w.id !== docId);
+      const prevFeatured = all.filter((w) => (w.isFeatured || w.featured) && w.id !== docId);
       for (const prev of prevFeatured) {
         const prevRef = doc(db, WALLPAPERS_COLLECTION, prev.id);
-        batch.set(prevRef, { isFeatured: false }, { merge: true });
+        batch.set(prevRef, { isFeatured: false, featured: false }, { merge: true });
       }
     }
   }
 
+  // Set BOTH isFeatured AND featured so Android Kotlin models deserialize correctly regardless of JavaBeans naming
   const targetRef = doc(db, WALLPAPERS_COLLECTION, docId);
-  batch.set(targetRef, { isFeatured: Boolean(isFeatured) }, { merge: true });
+  batch.set(targetRef, {
+    isFeatured: Boolean(isFeatured),
+    featured: Boolean(isFeatured)
+  }, { merge: true });
 
   await batch.commit();
   return { docId, isFeatured: Boolean(isFeatured) };
@@ -158,10 +162,14 @@ export function subscribeToRecentWallpapers(callback, count = 20) {
  */
 export async function fetchAllWallpapers() {
   const snap = await getDocs(collection(db, WALLPAPERS_COLLECTION));
-  return snap.docs.map((d) => ({
-    id: d.id,
-    ...d.data()
-  }));
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      isFeatured: Boolean(data.isFeatured || data.featured)
+    };
+  });
 }
 
 /**
