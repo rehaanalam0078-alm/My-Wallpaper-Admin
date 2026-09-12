@@ -193,21 +193,38 @@ export default function WallpaperLibrary() {
         );
       }
     } catch (err) {
+      console.error("Failed to toggle featured status:", err);
       error(err.message || "Failed to update Featured status.");
+      throw err;
     }
   };
 
   const handleSaveInspector = async (docId, updates) => {
     try {
-      await updateWallpaperDoc(docId, updates);
+      if (updates.isFeatured !== undefined) {
+        await setFeaturedWallpaper(docId, updates.isFeatured);
+      }
+      const { isFeatured, ...docUpdates } = updates;
+      if (Object.keys(docUpdates).length > 0) {
+        await updateWallpaperDoc(docId, docUpdates);
+      }
       success("Wallpaper updated in Firestore.");
       setWallpapers((prev) =>
-        prev.map((wp) => (wp.id === docId ? { ...wp, ...updates } : wp))
+        prev.map((wp) => {
+          if (wp.id === docId) {
+            return { ...wp, ...updates };
+          }
+          if (updates.isFeatured && wp.isFeatured) {
+            return { ...wp, isFeatured: false };
+          }
+          return wp;
+        })
       );
       setInspectingWallpaper((prev) =>
         prev && prev.id === docId ? { ...prev, ...updates } : prev
       );
     } catch (err) {
+      console.error("Failed to save inspector updates:", err);
       error(err.message || "Failed to update wallpaper.");
     }
   };

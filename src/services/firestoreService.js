@@ -8,6 +8,7 @@ import {
   deleteDoc,
   updateDoc,
   query,
+  where,
   limit,
   serverTimestamp,
   onSnapshot,
@@ -76,19 +77,34 @@ export async function setFeaturedWallpaper(docId, isFeatured = true) {
   const batch = writeBatch(db);
 
   if (isFeatured) {
-    const all = await fetchAllWallpapers();
-    const prevFeatured = all.filter((w) => w.isFeatured && w.id !== docId);
-    for (const prev of prevFeatured) {
-      const prevRef = doc(db, WALLPAPERS_COLLECTION, prev.id);
-      batch.update(prevRef, { isFeatured: false });
+    try {
+      const q = query(
+        collection(db, WALLPAPERS_COLLECTION),
+        where("isFeatured", "==", true)
+      );
+      const snap = await getDocs(q);
+      snap.forEach((d) => {
+        if (d.id !== docId) {
+          const prevRef = doc(db, WALLPAPERS_COLLECTION, d.id);
+          batch.set(prevRef, { isFeatured: false }, { merge: true });
+        }
+      });
+    } catch (queryErr) {
+      console.warn("Could not query isFeatured docs with where filter, checking all:", queryErr);
+      const all = await fetchAllWallpapers();
+      const prevFeatured = all.filter((w) => w.isFeatured && w.id !== docId);
+      for (const prev of prevFeatured) {
+        const prevRef = doc(db, WALLPAPERS_COLLECTION, prev.id);
+        batch.set(prevRef, { isFeatured: false }, { merge: true });
+      }
     }
   }
 
   const targetRef = doc(db, WALLPAPERS_COLLECTION, docId);
-  batch.update(targetRef, { isFeatured: isFeatured });
+  batch.set(targetRef, { isFeatured: Boolean(isFeatured) }, { merge: true });
 
   await batch.commit();
-  return { docId, isFeatured };
+  return { docId, isFeatured: Boolean(isFeatured) };
 }
 
 /**

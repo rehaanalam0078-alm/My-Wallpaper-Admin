@@ -27,7 +27,10 @@ export default function WallpaperCard({
       }`}
     >
       {/* 9:16 Aspect Ratio Image Frame */}
-      <div className="relative aspect-[9/16] bg-[#080f17] overflow-hidden">
+      <div 
+        onClick={() => onInspect && onInspect(wallpaper)}
+        className="relative aspect-[9/16] bg-[#080f17] overflow-hidden cursor-pointer"
+      >
         {!imgLoaded && !imgError && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#151c25] animate-pulse">
             <span className="font-mono text-xs text-[#908fa0]">Loading 9:16...</span>
@@ -51,7 +54,7 @@ export default function WallpaperCard({
           />
         )}
 
-        {/* Floating Top Badges */}
+        {/* Floating Top Badges & Actions */}
         <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10 pointer-events-none">
           <div className="flex items-center gap-1.5">
             <span className="px-2.5 py-0.5 rounded-full bg-[#00885d]/30 text-[#4edea3] border border-[#00885d]/60 font-mono text-[11px] backdrop-blur-md flex items-center gap-1.5 shadow">
@@ -59,29 +62,48 @@ export default function WallpaperCard({
               Live
             </span>
             {wallpaper.isFeatured && (
-              <span className="px-2.5 py-0.5 rounded-full bg-[#eab308]/40 text-[#facc15] border border-[#eab308]/80 font-mono text-[11px] backdrop-blur-md flex items-center gap-1 shadow font-bold">
-                <Star className="w-3 h-3 fill-[#facc15]" />
-                Featured
+              <span className="px-2.5 py-0.5 rounded-full bg-[#eab308]/90 text-black border border-[#fef08a] font-mono text-[11px] backdrop-blur-md flex items-center gap-1 shadow-lg font-bold animate-fade-in">
+                <Star className="w-3 h-3 fill-black" />
+                Featured Hero
               </span>
             )}
           </div>
 
-          {onSelect && (
+          <div className="flex items-center gap-1.5 pointer-events-auto">
+            {/* Always visible 1-click Featured Hero Toggle */}
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onSelect(wallpaper.id);
+                onToggleFeatured && onToggleFeatured(wallpaper);
               }}
-              className={`w-6 h-6 rounded flex items-center justify-center shadow pointer-events-auto transition-colors ${
-                selected
-                  ? "bg-[#6366f1] text-white"
-                  : "bg-[#080f17]/70 border border-[#464554] text-transparent hover:border-[#6366f1]"
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                wallpaper.isFeatured
+                  ? "bg-[#eab308] text-black shadow-lg shadow-[#eab308]/50 ring-2 ring-white/60 scale-105 hover:bg-[#ca8a04]"
+                  : "bg-[#080f17]/75 backdrop-blur-md border border-[#464554] text-[#908fa0] hover:text-[#facc15] hover:border-[#eab308]/70 hover:bg-[#192029]"
               }`}
+              title={wallpaper.isFeatured ? "Featured Hero Active (Click to remove)" : "Click to set as Featured Hero"}
             >
-              <Check className="w-3.5 h-3.5 stroke-[3]" />
+              <Star className={`w-3.5 h-3.5 ${wallpaper.isFeatured ? "fill-black" : "hover:fill-[#facc15]"}`} />
             </button>
-          )}
+
+            {onSelect && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(wallpaper.id);
+                }}
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shadow transition-colors ${
+                  selected
+                    ? "bg-[#6366f1] text-white"
+                    : "bg-[#080f17]/75 backdrop-blur-md border border-[#464554] text-transparent hover:border-[#6366f1]"
+                }`}
+              >
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Hover Action Overlay Scrim */}

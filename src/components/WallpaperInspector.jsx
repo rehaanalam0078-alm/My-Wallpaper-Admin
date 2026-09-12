@@ -42,8 +42,11 @@ export default function WallpaperInspector({
     if (!onToggleFeatured) return;
     setTogglingFeatured(true);
     try {
-      await onToggleFeatured(wallpaper);
-      setIsFeatured((prev) => !prev);
+      const nextVal = !isFeatured;
+      await onToggleFeatured({ ...wallpaper, isFeatured: isFeatured });
+      setIsFeatured(nextVal);
+    } catch (err) {
+      console.error("Inspector toggle error:", err);
     } finally {
       setTogglingFeatured(false);
     }
@@ -66,7 +69,7 @@ export default function WallpaperInspector({
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSaveCategory(wallpaper.id, { category, title });
+      await onSaveCategory(wallpaper.id, { category, title, isFeatured });
     } finally {
       setSaving(false);
     }
@@ -132,6 +135,50 @@ export default function WallpaperInspector({
               {copiedDocId ? <Check className="w-3.5 h-3.5 text-[#4edea3]" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedDocId ? "Copied" : "Copy"}</span>
             </button>
+          </div>
+
+          {/* Featured Hero Toggle Card (High-Priority Placement) */}
+          <div className={`p-3.5 rounded-xl border transition-all ${
+            isFeatured
+              ? "bg-[#eab308]/15 border-[#eab308] shadow-lg shadow-[#eab308]/10 ring-1 ring-[#eab308]/40"
+              : "bg-[#151c25] border-[#2A374A] hover:border-[#464554]"
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                  isFeatured ? "bg-[#eab308] text-black shadow-md shadow-[#eab308]/40" : "bg-[#192029] text-[#908fa0]"
+                }`}>
+                  <Star className={`w-4 h-4 ${isFeatured ? "fill-black" : ""}`} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-[#dce3f0]">Home Featured Hero</span>
+                    {isFeatured && (
+                      <span className="px-1.5 py-0.5 rounded bg-[#eab308] text-black font-mono text-[9px] font-bold">
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-[#908fa0] block">
+                    {isFeatured
+                      ? "Currently active top banner on Android app"
+                      : "Display as the top banner on mobile app"}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleFeatured}
+                disabled={togglingFeatured}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  isFeatured
+                    ? "bg-[#eab308] text-black hover:bg-[#ca8a04] shadow-md shadow-[#eab308]/30 font-bold"
+                    : "bg-[#6366f1] hover:bg-[#4f46e5] text-white shadow"
+                }`}
+              >
+                {togglingFeatured ? "Saving..." : isFeatured ? "Featured" : "Set Featured"}
+              </button>
+            </div>
           </div>
 
           {/* Editable Asset Title */}
@@ -203,50 +250,6 @@ export default function WallpaperInspector({
               >
                 {copiedUrl ? <Check className="w-3.5 h-3.5 text-[#4edea3]" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>Copy</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Featured Hero Toggle Card */}
-          <div className={`p-3.5 rounded-xl border transition-all ${
-            isFeatured
-              ? "bg-[#eab308]/10 border-[#eab308]/60 shadow-lg shadow-[#eab308]/5"
-              : "bg-[#151c25] border-[#2A374A]"
-          }`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                  isFeatured ? "bg-[#eab308] text-black" : "bg-[#192029] text-[#908fa0]"
-                }`}>
-                  <Star className={`w-4 h-4 ${isFeatured ? "fill-black" : ""}`} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-[#dce3f0]">Home Featured Hero</span>
-                    {isFeatured && (
-                      <span className="px-1.5 py-0.5 rounded bg-[#eab308] text-black font-mono text-[9px] font-bold">
-                        ACTIVE
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[11px] text-[#908fa0] block">
-                    {isFeatured
-                      ? "Currently active top banner on Android app"
-                      : "Display as the top banner on mobile app"}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleToggleFeatured}
-                disabled={togglingFeatured}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  isFeatured
-                    ? "bg-[#eab308]/20 border border-[#eab308] text-[#facc15] hover:bg-[#eab308]/30"
-                    : "bg-[#6366f1] hover:bg-[#4f46e5] text-white shadow"
-                }`}
-              >
-                {togglingFeatured ? "Saving..." : isFeatured ? "Featured" : "Set Featured"}
               </button>
             </div>
           </div>
