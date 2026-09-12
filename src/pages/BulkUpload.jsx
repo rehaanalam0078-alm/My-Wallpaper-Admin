@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   UploadCloud,
@@ -17,9 +17,13 @@ import {
   getImageDimensions,
   processBatchUpload
 } from "../services/cloudinaryService";
-import { addWallpaperDoc, saveBatchHistory } from "../services/firestoreService";
 import {
-  DEFAULT_CATEGORIES,
+  addWallpaperDoc,
+  saveBatchHistory,
+  fetchCategories,
+  createCategory
+} from "../services/firestoreService";
+import {
   normalizeCategory,
   getCategoryDisplayName
 } from "../services/categoryNormalizer";
@@ -31,9 +35,49 @@ export default function BulkUpload() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
+  // Dynamic Categories from Firestore
+  const [categories, setCategories] = useState([]);
+
   // Default Batch Category
   const [defaultCategory, setDefaultCategory] = useState("anime");
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const list = await fetchCategories();
+      setCategories(list);
+      if (list.length > 0) {
+        setDefaultCategory((prev) => {
+          if (list.some((c) => c.key === prev)) return prev;
+          return list[0].key;
+        });
+      }
+    } catch (err) {
+      console.warn("Could not load categories for upload:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  // Handle + New Category creation directly from Bulk Upload
+  const handleCreateCategory = async (trimmedName) => {
+    try {
+      const created = await createCategory(trimmedName);
+      await loadCategories();
+      setDefaultCategory(created.key);
+      setQueue((prev) =>
+        prev.map((i) => (!i.isOverridden ? { ...i, category: created.key } : i))
+      );
+      success(
+        `Category "${created.displayName}" created and selected as batch default.`
+      );
+    } catch (err) {
+      error(err.message || "Failed to create category.");
+      throw err;
+    }
+  };
 
   // Queue state
   const [queue, setQueue] = useState([]);
@@ -428,11 +472,15 @@ export default function BulkUpload() {
                 }}
                 className="px-3 py-2 bg-[#151c25] border border-[#2A374A] rounded-lg text-sm text-[#dce3f0] font-medium focus:outline-none focus:border-[#6366f1] cursor-pointer"
               >
-                {DEFAULT_CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
+                {categories.length > 0 ? (
+                  categories.map((cat) => (
+                    <option key={cat.key} value={cat.key}>
+                      {cat.displayName} {cat.count > 0 ? `(${cat.count})` : ""}
+                    </option>
+                  ))
+                ) : (
+                  <option value={defaultCategory}>{getCategoryDisplayName(defaultCategory)}</option>
+                )}
               </select>
 
               <button
@@ -596,11 +644,15 @@ export default function BulkUpload() {
                               : "border-[#2A374A] text-[#dce3f0]"
                           }`}
                         >
-                          {DEFAULT_CATEGORIES.map((cat) => (
-                            <option key={cat.id} value={cat.id}>
-                              {cat.name} {cat.id === defaultCategory ? "(Default)" : ""}
-                            </option>
-                          ))}
+                          {categories.length > 0 ? (
+                            categories.map((cat) => (
+                              <option key={cat.key} value={cat.key}>
+                                {cat.displayName} {cat.key === defaultCategory ? "(Default)" : ""}
+                              </option>
+                            ))
+                          ) : (
+                            <option value={item.category}>{getCategoryDisplayName(item.category)}</option>
+                          )}
                         </select>
                         {item.isOverridden && (
                           <span className="text-[10px] text-[#4cd7f6]">Overridden</span>
@@ -761,10 +813,9 @@ export default function BulkUpload() {
       <CategoryModal
         isOpen={showCategoryModal}
         onClose={() => setShowCategoryModal(false)}
-        onSave={async (newCat) => {
-          setDefaultCategory(newCat.key);
-          success(`Category "${newCat.displayName}" set as default.`);
-        }}
+        onSave={handleCreateCategory}
+        title="Create New Category"
+        actionLabel="Create & Select Category"
       />
     </div>
   );

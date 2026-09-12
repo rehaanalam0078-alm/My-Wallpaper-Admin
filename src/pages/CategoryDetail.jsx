@@ -1,15 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Plus, RefreshCw, Edit3 } from "lucide-react";
+import { ArrowLeft, Search, Plus, RefreshCw, Edit3, Trash2 } from "lucide-react";
 import WallpaperCard from "../components/WallpaperCard";
 import WallpaperInspector from "../components/WallpaperInspector";
 import DeleteModal from "../components/DeleteModal";
 import CategoryModal from "../components/CategoryModal";
+import CategoryDeleteModal from "../components/CategoryDeleteModal";
 import {
   fetchAllWallpapers,
+  fetchCategories,
   deleteWallpaperDoc,
   updateWallpaperDoc,
-  renameCategory
+  renameCategory,
+  deleteCategory
 } from "../services/firestoreService";
 import {
   getCategoryDisplayName,
@@ -24,6 +27,7 @@ export default function CategoryDetail() {
   const { success, error } = useToast();
 
   const [wallpapers, setWallpapers] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -31,25 +35,31 @@ export default function CategoryDetail() {
   const [deletingWallpaper, setDeletingWallpaper] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [deleteCategoryModalOpen, setDeleteCategoryModalOpen] = useState(false);
+  const [categoryDeleteLoading, setCategoryDeleteLoading] = useState(false);
 
   const categoryName = getCategoryDisplayName(rawCategory);
   const normalizedKey = normalizeCategory(rawCategory);
 
-  const loadWallpapers = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchAllWallpapers();
-      setWallpapers(data);
+      const [wpData, catData] = await Promise.all([
+        fetchAllWallpapers(),
+        fetchCategories()
+      ]);
+      setWallpapers(wpData);
+      setAllCategories(catData);
     } catch {
-      error("Could not fetch wallpapers from Firestore.");
+      error("Could not fetch category details.");
     } finally {
       setLoading(false);
     }
   }, [error]);
 
   useEffect(() => {
-    loadWallpapers();
-  }, [loadWallpapers]);
+    loadData();
+  }, [loadData]);
 
   const categoryWallpapers = useMemo(() => {
     return wallpapers.filter((wp) => {
@@ -68,7 +78,7 @@ export default function CategoryDetail() {
     try {
       await updateWallpaperDoc(docId, updates);
       success("Wallpaper updated.");
-      loadWallpapers();
+      loadData();
     } catch (err) {
       error(err.message || "Failed to update wallpaper.");
     }
@@ -84,11 +94,34 @@ export default function CategoryDetail() {
       if (inspectingWallpaper?.id === deletingWallpaper.id) {
         setInspectingWallpaper(null);
       }
-      loadWallpapers();
+      loadData();
     } catch (err) {
       error(err.message || "Failed to delete.");
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async ({
+    categoryKey,
+    cascadeDeleteWallpapers,
+    reassignToCategory,
+    onProgress
+  }) => {
+    setCategoryDeleteLoading(true);
+    try {
+      await deleteCategory(categoryKey, {
+        cascadeDeleteWallpapers,
+        reassignToCategory,
+        onProgress
+      });
+      success(`Category "${categoryName}" deleted.`);
+      navigate("/categories", { replace: true });
+    } catch (err) {
+      error(err.message || "Failed to delete category.");
+      throw err;
+    } finally {
+      setCategoryDeleteLoading(false);
     }
   };
 
@@ -133,7 +166,7 @@ export default function CategoryDetail() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={loadWallpapers}
+            onClick={loadData}
             disabled={loading}
             className="p-2 rounded-lg bg-[#192029] hover:bg-[#232a34] border border-[#2A374A] text-[#dce3f0] transition-colors"
             title="Refresh"
@@ -147,6 +180,15 @@ export default function CategoryDetail() {
           >
             <Edit3 className="w-4 h-4 text-[#c0c1ff]" />
             <span>Rename Category</span>
+          </button>
+
+          <button
+            onClick={() => setDeleteCategoryModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#232a34] hover:bg-[#93000a]/20 border border-[#2A374A] text-[#908fa0] hover:text-[#ffb4ab] text-xs font-semibold transition-all"
+            title="Delete this category"
+          >
+            <Trash2 className="w-4 h-4 text-[#ef4444]" />
+            <span>Delete Category</span>
           </button>
 
           <button
@@ -209,6 +251,7 @@ export default function CategoryDetail() {
       {inspectingWallpaper && (
         <WallpaperInspector
           wallpaper={inspectingWallpaper}
+          categories={allCategories}
           onClose={() => setInspectingWallpaper(null)}
           onSaveCategory={handleSaveInspector}
           onDelete={(w) => setDeletingWallpaper(w)}
@@ -219,6 +262,7 @@ export default function CategoryDetail() {
       {deletingWallpaper && (
         <DeleteModal
           isOpen={!!deletingWallpaper}
+          wallpaper={deletingWallpaper}
           onClose={() => setDeletingWallpaper(null)}
           onConfirm={handleConfirmDelete}
           loading={deleteLoading}
@@ -239,6 +283,20 @@ export default function CategoryDetail() {
           isRename={true}
         />
       )}
+
+      {/* Delete Category Modal */}
+      <CategoryDeleteModal
+        isOpen={deleteCategoryModalOpen}
+        category={{
+          key: normalizedKey,
+          displayName: categoryName,
+          count: categoryWallpapers.length
+        }}
+        allCategories={allCategories}
+        onClose={() => setDeleteCategoryModalOpen(false)}
+        onConfirm={handleDeleteCategory}
+        loading={categoryDeleteLoading}
+      />
     </div>
   );
 }

@@ -205,42 +205,54 @@ export async function fetchBatchHistory(maxCount = 50) {
 /**
  * Fetches categories with true Firestore persistence.
  * Combines explicit categories from 'categories' collection with distinct categories in 'wallpapers'.
+ * Honors isDeleted flags so deleted categories do not resurrect.
  * Returns comprehensive category objects with counts and thumbnail previews.
  */
 export async function fetchCategories() {
   // 1. Read persistent categories collection
   let firestoreCategories = [];
+  const deletedCategoryKeys = new Set();
+
   try {
     const catSnap = await getDocs(collection(db, CATEGORIES_COLLECTION));
-    firestoreCategories = catSnap.docs.map((d) => ({
-      id: d.id,
-      key: d.id,
-      ...d.data()
-    }));
+    catSnap.docs.forEach((d) => {
+      const data = d.data();
+      const key = d.id || data.key || data.normalizedName;
+      if (data.isDeleted) {
+        if (key) deletedCategoryKeys.add(key);
+      } else {
+        firestoreCategories.push({
+          id: d.id,
+          key: key || d.id,
+          ...data
+        });
+      }
+    });
   } catch (err) {
     console.warn("Could not load categories collection:", err);
   }
 
   // 2. Read wallpapers to compute live counts and thumbnails
   const wallpapers = await fetchAllWallpapers();
-
   const categoryMap = new Map();
 
-  // Initialize with predefined defaults
+  // Initialize with predefined defaults (unless explicitly marked deleted)
   DEFAULT_CATEGORIES.forEach((cat) => {
-    categoryMap.set(cat.id, {
-      key: cat.id,
-      displayName: cat.name,
-      count: 0,
-      thumbnailUrl: null,
-      isPersistent: false
-    });
+    if (!deletedCategoryKeys.has(cat.id)) {
+      categoryMap.set(cat.id, {
+        key: cat.id,
+        displayName: cat.name,
+        count: 0,
+        thumbnailUrl: null,
+        isPersistent: false
+      });
+    }
   });
 
   // Merge Firestore categories collection
   firestoreCategories.forEach((cat) => {
     const key = cat.id || cat.key || cat.normalizedName;
-    if (!key) return;
+    if (!key || deletedCategoryKeys.has(key)) return;
     categoryMap.set(key, {
       key,
       displayName: cat.name || getCategoryDisplayName(key),
@@ -254,6 +266,8 @@ export async function fetchCategories() {
   // Aggregate live counts and sample preview images from real wallpapers
   wallpapers.forEach((wp) => {
     const norm = normalizeCategory(wp.category);
+    if (!norm || norm === "uncategorized" || deletedCategoryKeys.has(norm)) return;
+
     if (!categoryMap.has(norm)) {
       categoryMap.set(norm, {
         key: norm,
@@ -270,7 +284,10 @@ export async function fetchCategories() {
     }
   });
 
-  return Array.from(categoryMap.values()).sort((a, b) => b.count - a.count);
+  return Array.from(categoryMap.values()).sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return a.displayName.localeCompare(b.displayName);
+  });
 }
 
 /**
@@ -294,10 +311,13 @@ export async function createCategory(rawName) {
 
   const categoryRef = doc(db, CATEGORIES_COLLECTION, normalizedKey);
 
-  // Check if document already exists
+  // Check if document already exists and is active
   const existingSnap = await getDoc(categoryRef);
   if (existingSnap.exists()) {
-    throw new Error(`Category "${trimmed}" already exists.`);
+    const existingData = existingSnap.data();
+    if (!existingData.isDeleted) {
+      throw new Error(`Category "${trimmed}" already exists.`);
+    }
   }
 
   const docPayload = {
@@ -305,6 +325,7 @@ export async function createCategory(rawName) {
     key: normalizedKey,
     name: trimmed,
     normalizedName: normalizedKey,
+    isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     wallpaperCount: 0
@@ -315,7 +336,7 @@ export async function createCategory(rawName) {
 
   // Post-write verification: confirm document exists in Firestore
   const verifySnap = await getDoc(categoryRef);
-  if (!verifySnap.exists()) {
+  if (!verifySnap.exists() || verifySnap.data().isDeleted) {
     throw new Error("Failed to verify category creation in Firestore.");
   }
 
@@ -354,6 +375,7 @@ export async function renameCategory(oldKey, newRawName, onProgress) {
       key: oldKey,
       name: trimmedNewName,
       normalizedName: oldKey,
+      isDeleted: false,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
@@ -368,7 +390,7 @@ export async function renameCategory(oldKey, newRawName, onProgress) {
   // Case B: Changing category key (requires wallpaper migration)
   const newCatRef = doc(db, CATEGORIES_COLLECTION, newNormalizedKey);
   const newCatSnap = await getDoc(newCatRef);
-  if (newCatSnap.exists()) {
+  if (newCatSnap.exists() && !newCatSnap.data().isDeleted) {
     throw new Error(`Category "${trimmedNewName}" already exists.`);
   }
 
@@ -410,22 +432,36 @@ export async function renameCategory(oldKey, newRawName, onProgress) {
     key: newNormalizedKey,
     name: trimmedNewName,
     normalizedName: newNormalizedKey,
+    isDeleted: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     wallpaperCount: totalToUpdate
   });
 
-  // Delete old category document if it existed
+  // Delete old category document or mark as deleted
   try {
     const oldCatRef = doc(db, CATEGORIES_COLLECTION, oldKey);
-    await deleteDoc(oldCatRef);
+    const isDefault = DEFAULT_CATEGORIES.some((c) => c.id === oldKey);
+    if (isDefault) {
+      await setDoc(oldCatRef, {
+        id: oldKey,
+        key: oldKey,
+        name: getCategoryDisplayName(oldKey),
+        normalizedName: oldKey,
+        isDeleted: true,
+        deletedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await deleteDoc(oldCatRef);
+    }
   } catch (err) {
-    console.warn("Old category document could not be removed:", err);
+    console.warn("Old category document cleanup notice:", err);
   }
 
   // Post-write verification
   const verifySnap = await getDoc(newCatRef);
-  if (!verifySnap.exists()) {
+  if (!verifySnap.exists() || verifySnap.data().isDeleted) {
     throw new Error("Failed to verify renamed category in Firestore.");
   }
 
@@ -438,31 +474,106 @@ export async function renameCategory(oldKey, newRawName, onProgress) {
 }
 
 /**
- * Deletes a category document from Firestore.
- * Prevents accidental deletion if wallpapers still reference it.
+ * Deletes a category with complete options:
+ * - Direct delete if 0 wallpapers
+ * - Wallpaper reassignment if requested
+ * - Cascade delete of all wallpapers if requested
+ * - Prevents resurrection of default categories using Firestore tombstones
  */
-export async function deleteCategory(categoryKey) {
+export async function deleteCategory(
+  categoryKey,
+  { cascadeDeleteWallpapers = false, reassignToCategory = null, onProgress = null } = {}
+) {
   if (!categoryKey) throw new Error("Category key is required.");
 
-  // Check if any wallpaper still uses this category
+  // 1. Fetch matching wallpapers
   const allWallpapers = await fetchAllWallpapers();
-  const count = allWallpapers.filter(
+  const matchingWallpapers = allWallpapers.filter(
     (wp) => normalizeCategory(wp.category) === categoryKey
-  ).length;
+  );
 
+  const count = matchingWallpapers.length;
+
+  // 2. Handle wallpapers if any exist
   if (count > 0) {
-    throw new Error(
-      `Cannot delete category "${getCategoryDisplayName(categoryKey)}" because it still contains ${count} wallpapers. Please reassign or delete the wallpapers first.`
-    );
+    if (reassignToCategory) {
+      const targetKey = normalizeCategory(reassignToCategory);
+      if (!targetKey || targetKey === "uncategorized" || targetKey === categoryKey) {
+        throw new Error("Please select a different, valid category to reassign wallpapers to.");
+      }
+
+      const BATCH_SIZE = 400;
+      let updatedCount = 0;
+      for (let i = 0; i < matchingWallpapers.length; i += BATCH_SIZE) {
+        const chunk = matchingWallpapers.slice(i, i + BATCH_SIZE);
+        const batch = writeBatch(db);
+
+        for (const wp of chunk) {
+          const wpRef = doc(db, WALLPAPERS_COLLECTION, wp.id);
+          batch.update(wpRef, { category: targetKey });
+        }
+
+        await batch.commit();
+        updatedCount += chunk.length;
+
+        if (onProgress) {
+          onProgress({
+            completed: updatedCount,
+            total: count,
+            percent: Math.round((updatedCount / count) * 100),
+            action: "reassigning"
+          });
+        }
+      }
+    } else if (cascadeDeleteWallpapers) {
+      const BATCH_SIZE = 400;
+      let deletedCount = 0;
+      for (let i = 0; i < matchingWallpapers.length; i += BATCH_SIZE) {
+        const chunk = matchingWallpapers.slice(i, i + BATCH_SIZE);
+        const batch = writeBatch(db);
+
+        for (const wp of chunk) {
+          const wpRef = doc(db, WALLPAPERS_COLLECTION, wp.id);
+          batch.delete(wpRef);
+        }
+
+        await batch.commit();
+        deletedCount += chunk.length;
+
+        if (onProgress) {
+          onProgress({
+            completed: deletedCount,
+            total: count,
+            percent: Math.round((deletedCount / count) * 100),
+            action: "deleting"
+          });
+        }
+      }
+    } else {
+      throw new Error(
+        `Category contains ${count} wallpapers. Choose to reassign them or delete them with the category.`
+      );
+    }
   }
 
+  // 3. Remove or tombstone the category document
   const catRef = doc(db, CATEGORIES_COLLECTION, categoryKey);
-  await deleteDoc(catRef);
+  const isDefault = DEFAULT_CATEGORIES.some((c) => c.id === categoryKey);
 
-  // Post-delete verification
-  const verifySnap = await getDoc(catRef);
-  if (verifySnap.exists()) {
-    throw new Error("Failed to confirm category deletion from Firestore.");
+  if (isDefault) {
+    // Record tombstone so default categories don't resurrect
+    await setDoc(catRef, {
+      id: categoryKey,
+      key: categoryKey,
+      name: getCategoryDisplayName(categoryKey),
+      normalizedName: categoryKey,
+      isDeleted: true,
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } else {
+    // Custom category: delete doc directly from Firestore
+    await deleteDoc(catRef);
   }
 
   return true;

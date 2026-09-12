@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ShieldCheck,
   Server,
@@ -8,13 +8,21 @@ import {
   Save
 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
-import { DEFAULT_CATEGORIES } from "../services/categoryNormalizer";
+import { fetchCategories } from "../services/firestoreService";
+import { getCategoryDisplayName } from "../services/categoryNormalizer";
 
 export default function Settings() {
   const { success } = useToast();
 
   const [concurrency, setConcurrency] = useState(3);
   const [defaultCat, setDefaultCat] = useState("anime");
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    fetchCategories()
+      .then((cats) => setCategories(cats))
+      .catch((err) => console.warn("Could not load categories for settings:", err));
+  }, []);
 
   const handleSavePreferences = (e) => {
     e.preventDefault();
@@ -166,11 +174,15 @@ export default function Settings() {
               onChange={(e) => setDefaultCat(e.target.value)}
               className="w-full px-3 py-2 bg-[#151c25] border border-[#2A374A] rounded-lg text-xs text-[#dce3f0] focus:outline-none focus:border-[#6366f1] cursor-pointer"
             >
-              {DEFAULT_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {categories.length > 0 ? (
+                categories.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.displayName}
+                  </option>
+                ))
+              ) : (
+                <option value={defaultCat}>{getCategoryDisplayName(defaultCat)}</option>
+              )}
             </select>
           </div>
 

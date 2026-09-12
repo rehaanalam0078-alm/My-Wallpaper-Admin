@@ -1,22 +1,35 @@
 import { useState, useEffect } from "react";
 import { X, Copy, Check, Sliders, Trash2, Save, Smartphone } from "lucide-react";
-import { DEFAULT_CATEGORIES } from "../services/categoryNormalizer";
+import { fetchCategories } from "../services/firestoreService";
+import { getCategoryDisplayName, normalizeCategory } from "../services/categoryNormalizer";
 
 export default function WallpaperInspector({
   wallpaper,
+  categories: propCategories = [],
   onClose,
   onSaveCategory,
   onDelete
 }) {
   const [category, setCategory] = useState(wallpaper?.category || "anime");
   const [title, setTitle] = useState(wallpaper?.title || wallpaper?.filename || "");
+  const [categories, setCategories] = useState(propCategories);
   const [copiedDocId, setCopiedDocId] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (propCategories && propCategories.length > 0) {
+      setCategories(propCategories);
+    } else {
+      fetchCategories()
+        .then((cats) => setCategories(cats))
+        .catch((err) => console.warn("Could not load inspector categories:", err));
+    }
+  }, [propCategories]);
+
+  useEffect(() => {
     if (wallpaper) {
-      setCategory(wallpaper.category || "anime");
+      setCategory(normalizeCategory(wallpaper.category) || "anime");
       setTitle(wallpaper.title || wallpaper.filename || "");
     }
   }, [wallpaper]);
@@ -125,11 +138,16 @@ export default function WallpaperInspector({
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 bg-[#151c25] border border-[#2A374A] rounded-lg text-[#dce3f0] text-xs focus:outline-none focus:border-[#6366f1] cursor-pointer"
             >
-              {DEFAULT_CATEGORIES.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
+              {categories.map((cat) => (
+                <option key={cat.key} value={cat.key}>
+                  {cat.displayName}
                 </option>
               ))}
+              {category && !categories.some((c) => c.key === category) && (
+                <option key={category} value={category}>
+                  {getCategoryDisplayName(category)}
+                </option>
+              )}
             </select>
           </div>
 

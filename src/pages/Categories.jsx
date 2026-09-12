@@ -9,7 +9,7 @@ import {
   Edit3
 } from "lucide-react";
 import CategoryModal from "../components/CategoryModal";
-import DeleteModal from "../components/DeleteModal";
+import CategoryDeleteModal from "../components/CategoryDeleteModal";
 import {
   fetchCategories,
   createCategory,
@@ -20,7 +20,7 @@ import { useToast } from "../context/ToastContext";
 
 export default function Categories() {
   const navigate = useNavigate();
-  const { success, error, warning } = useToast();
+  const { success, error } = useToast();
 
   const [categoriesList, setCategoriesList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -75,25 +75,36 @@ export default function Categories() {
     }
   };
 
-  // Delete Category handler with safety verification
-  const handleConfirmDelete = async () => {
-    if (!deletingCategory) return;
-    if (deletingCategory.count > 0) {
-      warning(
-        `Cannot delete "${deletingCategory.displayName}" because it contains ${deletingCategory.count} wallpapers. Reassign or delete wallpapers first.`
-      );
-      setDeletingCategory(null);
-      return;
-    }
-
+  // Delete Category handler with safety verification, reassignment, or cascade delete
+  const handleConfirmDelete = async ({
+    categoryKey,
+    cascadeDeleteWallpapers,
+    reassignToCategory,
+    onProgress
+  }) => {
     setDeleteLoading(true);
     try {
-      await deleteCategory(deletingCategory.key);
+      await deleteCategory(categoryKey, {
+        cascadeDeleteWallpapers,
+        reassignToCategory,
+        onProgress
+      });
       await loadData();
-      success(`Category "${deletingCategory.displayName}" removed from Firestore.`);
+      if (reassignToCategory) {
+        success(
+          `Category deleted and wallpapers reassigned successfully.`
+        );
+      } else if (cascadeDeleteWallpapers) {
+        success(
+          `Category and all its associated wallpapers deleted from Firestore.`
+        );
+      } else {
+        success(`Category removed from Firestore.`);
+      }
       setDeletingCategory(null);
     } catch (err) {
       error(err.message || "Failed to delete category.");
+      throw err;
     } finally {
       setDeleteLoading(false);
     }
@@ -245,21 +256,15 @@ export default function Categories() {
         />
       )}
 
-      {/* Delete Category Confirmation Modal */}
-      {deletingCategory && (
-        <DeleteModal
-          isOpen={!!deletingCategory}
-          onClose={() => setDeletingCategory(null)}
-          onConfirm={handleConfirmDelete}
-          loading={deleteLoading}
-          title={`Delete Category "${deletingCategory.displayName}"`}
-          description={
-            deletingCategory.count > 0
-              ? `Cannot delete this category because it contains ${deletingCategory.count} wallpapers. To protect Android app data integrity, please delete or reassign its wallpapers first.`
-              : `Are you sure you want to permanently delete category "${deletingCategory.displayName}" from Firestore? This action cannot be undone.`
-          }
-        />
-      )}
+      {/* Delete Category Modal with Reassign / Cascade Options */}
+      <CategoryDeleteModal
+        isOpen={!!deletingCategory}
+        category={deletingCategory}
+        allCategories={categoriesList}
+        onClose={() => setDeletingCategory(null)}
+        onConfirm={handleConfirmDelete}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

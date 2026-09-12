@@ -14,11 +14,11 @@ import WallpaperInspector from "../components/WallpaperInspector";
 import DeleteModal from "../components/DeleteModal";
 import {
   fetchAllWallpapers,
+  fetchCategories,
   deleteWallpaperDoc,
   updateWallpaperDoc
 } from "../services/firestoreService";
 import {
-  DEFAULT_CATEGORIES,
   normalizeCategory,
   getCategoryDisplayName,
   isCategoryMatch
@@ -31,6 +31,7 @@ export default function WallpaperLibrary() {
   const { success, error } = useToast();
 
   const [wallpapers, setWallpapers] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Filters & Controls
@@ -53,8 +54,12 @@ export default function WallpaperLibrary() {
   const loadWallpapers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchAllWallpapers();
-      setWallpapers(data);
+      const [wpData, catData] = await Promise.all([
+        fetchAllWallpapers(),
+        fetchCategories()
+      ]);
+      setWallpapers(wpData);
+      setAllCategories(catData);
     } catch (err) {
       console.error(err);
       error("Could not fetch wallpapers from Firestore.");
@@ -72,14 +77,18 @@ export default function WallpaperLibrary() {
     if (cat) setSelectedCategory(cat);
   }, [searchParams]);
 
-  // Extract all categories found in database
+  // Extract all categories found in database and categories collection
   const dynamicCategories = useMemo(() => {
-    const cats = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
+    const catMap = new Map();
+    allCategories.forEach((c) => catMap.set(c.key, c.key));
     wallpapers.forEach((wp) => {
-      if (wp.category) cats.add(normalizeCategory(wp.category));
+      if (wp.category) {
+        const norm = normalizeCategory(wp.category);
+        catMap.set(norm, norm);
+      }
     });
-    return Array.from(cats);
-  }, [wallpapers]);
+    return Array.from(catMap.values());
+  }, [allCategories, wallpapers]);
 
   // Filter & Sort
   const filteredWallpapers = useMemo(() => {
@@ -498,6 +507,7 @@ export default function WallpaperLibrary() {
       {inspectingWallpaper && (
         <WallpaperInspector
           wallpaper={inspectingWallpaper}
+          categories={allCategories}
           onClose={() => setInspectingWallpaper(null)}
           onSaveCategory={handleSaveInspector}
           onDelete={(w) => setDeletingWallpaper(w)}
