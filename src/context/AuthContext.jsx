@@ -1,12 +1,11 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import {
   signInWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
   onAuthStateChanged
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth } from "../firebase";
 
 const AuthContext = createContext(null);
 
@@ -15,26 +14,37 @@ export function AuthProvider({ children }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Authoritative check reading Firebase Auth Custom Claims directly from the ID token
+  const verifyAdminClaims = useCallback(async (currentUser, forceRefresh = false) => {
+    if (!currentUser) return false;
+    try {
+      const tokenResult = await currentUser.getIdTokenResult(forceRefresh);
+      const claims = tokenResult.claims || {};
+      const authorized = Boolean(claims.admin === true || claims.role === "admin");
+      return authorized;
+    } catch (err) {
+      console.warn("Could not read auth token claims:", err);
+      return false;
+    }
+  }, []);
+
+  const refreshUserClaims = useCallback(async () => {
+    if (!auth.currentUser) {
+      setIsAdmin(false);
+      return false;
+    }
+    const authorized = await verifyAdminClaims(auth.currentUser, true);
+    setIsAdmin(authorized);
+    return authorized;
+  }, [verifyAdminClaims]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        try {
-          // Check if admin document exists in 'admins' collection
-          const adminDocRef = doc(db, "admins", currentUser.uid);
-          const adminSnap = await getDoc(adminDocRef);
-
-          if (adminSnap.exists() && adminSnap.data()?.role === "admin") {
-            setIsAdmin(true);
-          } else {
-            // Fallback for primary authenticated user of this Firebase project
-            // To ensure legitimate administrators can immediately manage wallpapers
-            setIsAdmin(true);
-          }
-        } catch {
-          // In case rules restrict reads, allow authenticated admin
-          setIsAdmin(true);
-        }
+        // Authoritatively check custom claims
+        const authorized = await verifyAdminClaims(currentUser, false);
+        setIsAdmin(authorized);
       } else {
         setUser(null);
         setIsAdmin(false);
@@ -43,17 +53,42 @@ export function AuthProvider({ children }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [verifyAdminClaims]);
 
   const login = async (email, password) => {
     if (!email || !password) {
       throw new Error("Please enter both email and password.");
     }
-    return await signInWithEmailAndPassword(auth, email.trim(), password);
+    const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+    // Immediately force-refresh token to get authoritative custom claims
+    const tokenResult = await cred.user.getIdTokenResult(true);
+    const claims = tokenResult.claims || {};
+    const authorized = Boolean(claims.admin === true || claims.role === "admin");
+
+    if (!authorized) {
+      // Reject non-admin user immediately: sign them out of the console
+      await signOut(auth);
+      setUser(null);
+      setIsAdmin(false);
+      const err = new Error(
+        "Access denied. This account is not authorized to use the MyWallpaper Studio Admin Panel."
+      );
+      err.code = "auth/unauthorized-role";
+      throw err;
+    }
+
+    setUser(cred.user);
+    setIsAdmin(true);
+    return cred;
   };
 
   const logout = async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } finally {
+      setUser(null);
+      setIsAdmin(false);
+    }
   };
 
   const resetPassword = async (email) => {
@@ -70,6 +105,7 @@ export function AuthProvider({ children }) {
         login,
         logout,
         resetPassword,
+        refreshUserClaims,
         isAuthenticated: !!user
       }}
     >

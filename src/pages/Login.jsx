@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Sparkles, Lock, Mail, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
+import { Sparkles, Lock, Mail, ArrowRight, AlertCircle, Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { isFirebaseConfigured } from "../firebase";
@@ -12,19 +12,28 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
-  const { login, resetPassword, isAuthenticated } = useAuth();
+  const { login, resetPassword, isAuthenticated, isAdmin } = useAuth();
   const { success, error } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = location.state?.from?.pathname || "/dashboard";
 
-  // If already authenticated, redirect to dashboard
+  // Check if redirected because user was unauthorized
   useEffect(() => {
-    if (isAuthenticated) {
+    if (location.state?.unauthorized) {
+      setErrorMsg(
+        "Access denied. This account is not authorized to use the MyWallpaper Studio Admin Panel."
+      );
+    }
+  }, [location.state]);
+
+  // Only redirect to dashboard if authenticated AND authorized as admin
+  useEffect(() => {
+    if (isAuthenticated && isAdmin) {
       navigate("/dashboard", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isAdmin, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,11 +47,18 @@ export default function Login() {
 
     try {
       await login(email, password);
-      success("Authenticated successfully.", "Welcome back");
+      success("Authenticated as Administrator.", "Welcome back");
       navigate(from, { replace: true });
     } catch (err) {
       let friendlyError = "Authentication failed. Please check your credentials.";
-      if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
+      if (err.code === "auth/unauthorized-role") {
+        friendlyError =
+          "Access denied. This account is not authorized to use the MyWallpaper Studio Admin Panel.";
+      } else if (
+        err.code === "auth/invalid-credential" ||
+        err.code === "auth/wrong-password" ||
+        err.code === "auth/user-not-found"
+      ) {
         friendlyError = "Invalid email or password.";
       } else if (err.code === "auth/too-many-requests") {
         friendlyError = "Too many failed attempts. Please try again later.";
@@ -101,9 +117,9 @@ export default function Login() {
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="mb-5 p-3 rounded-lg bg-[#93000a]/20 border border-[#ef4444]/50 flex items-start gap-2.5 text-xs text-[#ffb4ab] animate-fade-in">
-            <AlertCircle className="w-4 h-4 text-[#ef4444] shrink-0 mt-0.5" />
-            <span>{errorMsg}</span>
+          <div className="mb-5 p-3.5 rounded-lg bg-[#93000a]/25 border border-[#ef4444]/60 flex items-start gap-2.5 text-xs text-[#ffb4ab] animate-fade-in shadow-lg">
+            <ShieldAlert className="w-4 h-4 text-[#ef4444] shrink-0 mt-0.5" />
+            <span className="leading-relaxed font-medium">{errorMsg}</span>
           </div>
         )}
 
@@ -172,7 +188,7 @@ export default function Login() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Authenticating with Firebase...</span>
+                <span>Verifying Administrator Privileges...</span>
               </>
             ) : (
               <>
@@ -185,8 +201,8 @@ export default function Login() {
 
         {/* Security Notice */}
         <div className="mt-8 pt-4 border-t border-[#2A374A]/60 flex items-center justify-between text-[11px] font-mono text-[#908fa0]">
-          <span>Firebase Auth Secured</span>
-          <span className="text-[#4edea3]">Project: {import.meta.env.VITE_FIREBASE_PROJECT_ID || "Active"}</span>
+          <span>Firebase Auth Claims Enforced</span>
+          <span className="text-[#4edea3]">Role: Admin Only</span>
         </div>
       </div>
     </div>

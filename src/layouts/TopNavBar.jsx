@@ -101,16 +101,21 @@ export default function TopNavBar({ onOpenSidebar, onGlobalSearch }) {
         </div>
 
         {/* Admin Avatar Pill */}
-        <div className="flex items-center gap-2 pl-2 border-l border-[#2A374A]">
-          <div className="w-8 h-8 rounded-full bg-[#8083ff] text-[#0d0096] text-xs font-bold flex items-center justify-center ring-2 ring-[#2A374A]">
+        <div className="flex items-center gap-2.5 pl-2 border-l border-[#2A374A]">
+          <div className="w-8 h-8 rounded-full bg-[#6366f1] text-white text-xs font-bold flex items-center justify-center ring-2 ring-[#2A374A] shadow-inner">
             {userInitials}
           </div>
           <div className="hidden xl:flex flex-col text-left">
-            <span className="text-xs font-semibold text-[#dce3f0] leading-tight">
-              {user?.displayName || "Studio Admin"}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-[#dce3f0] leading-tight">
+                {user?.displayName || "Studio Admin"}
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-[#6366f1]/20 text-[#c0c1ff] font-mono text-[9px] border border-[#6366f1]/40 uppercase font-bold">
+                ADMIN
+              </span>
+            </div>
             <span className="font-mono text-[10px] text-[#908fa0]">
-              {user?.email || "root@mywallpaper.dev"}
+              {user?.email || "admin@mywallpaper.dev"}
             </span>
           </div>
         </div>

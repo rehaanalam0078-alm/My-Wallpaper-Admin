@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to verify admin authorization via custom claims
+    function isAdmin() {
+      return request.auth != null && 
+        (request.auth.token.admin == true || request.auth.token.role == 'admin');
+    }
+
+    // 1. Wallpapers collection
+    // - Public read for the Android consumer application
+    // - Writes (create, update, delete) restricted strictly to authorized administrators
+    match /wallpapers/{wallpaperId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 2. Categories collection
+    // - Public read so Android app and admin panel can view all categories
+    // - Writes (create, update, delete) restricted strictly to authorized administrators
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 3. Upload batches (history)
+    // - Admin only read & write
+    match /upload_batches/{batchId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 4. Admin accounts and audit collection
+    // - Admin only read & write
+    match /admins/{adminId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 5. Users collection (consumer user profiles if used by mobile app)
+    // - Authenticated consumer users can only read/write their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

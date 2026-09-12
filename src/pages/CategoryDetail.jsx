@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, Search, Plus, RefreshCw, Edit3 } from "lucide-react";
 import WallpaperCard from "../components/WallpaperCard";
 import WallpaperInspector from "../components/WallpaperInspector";
 import DeleteModal from "../components/DeleteModal";
+import CategoryModal from "../components/CategoryModal";
 import {
   fetchAllWallpapers,
   deleteWallpaperDoc,
-  updateWallpaperDoc
+  updateWallpaperDoc,
+  renameCategory
 } from "../services/firestoreService";
 import {
   getCategoryDisplayName,
@@ -28,8 +30,10 @@ export default function CategoryDetail() {
   const [inspectingWallpaper, setInspectingWallpaper] = useState(null);
   const [deletingWallpaper, setDeletingWallpaper] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
 
   const categoryName = getCategoryDisplayName(rawCategory);
+  const normalizedKey = normalizeCategory(rawCategory);
 
   const loadWallpapers = useCallback(async () => {
     setLoading(true);
@@ -37,7 +41,7 @@ export default function CategoryDetail() {
       const data = await fetchAllWallpapers();
       setWallpapers(data);
     } catch {
-      error("Could not fetch wallpapers.");
+      error("Could not fetch wallpapers from Firestore.");
     } finally {
       setLoading(false);
     }
@@ -66,7 +70,7 @@ export default function CategoryDetail() {
       success("Wallpaper updated.");
       loadWallpapers();
     } catch (err) {
-      error(err.message || "Failed to update.");
+      error(err.message || "Failed to update wallpaper.");
     }
   };
 
@@ -85,6 +89,18 @@ export default function CategoryDetail() {
       error(err.message || "Failed to delete.");
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleRename = async (newRawName) => {
+    try {
+      const res = await renameCategory(normalizedKey, newRawName);
+      success(`Category renamed to "${res.displayName}" (${res.updatedWallpapersCount} wallpapers updated).`);
+      setRenameModalOpen(false);
+      navigate(`/categories/${res.newKey}`, { replace: true });
+    } catch (err) {
+      error(err.message || "Failed to rename category.");
+      throw err;
     }
   };
 
@@ -110,18 +126,35 @@ export default function CategoryDetail() {
               </span>
             </div>
             <p className="text-xs lg:text-sm text-[#908fa0]">
-              Canonical key: <code className="font-mono text-[#c0c1ff]">{normalizeCategory(rawCategory)}</code>
+              Canonical key: <code className="font-mono text-[#c0c1ff]">{normalizedKey}</code>
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button
+            onClick={loadWallpapers}
+            disabled={loading}
+            className="p-2 rounded-lg bg-[#192029] hover:bg-[#232a34] border border-[#2A374A] text-[#dce3f0] transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+
+          <button
+            onClick={() => setRenameModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#232a34] hover:bg-[#2e353f] border border-[#2A374A] text-[#dce3f0] text-xs font-semibold transition-all"
+          >
+            <Edit3 className="w-4 h-4 text-[#c0c1ff]" />
+            <span>Rename Category</span>
+          </button>
+
+          <button
             onClick={() => navigate(`/upload?category=${rawCategory}`)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] text-white text-xs font-semibold shadow-lg transition-all"
           >
             <Plus className="w-4 h-4" />
-            <span>Upload to {categoryName}</span>
+            <span>Upload Wallpapers</span>
           </button>
         </div>
       </div>
@@ -140,33 +173,39 @@ export default function CategoryDetail() {
         />
       </div>
 
-      {/* Grid */}
+      {/* Grid Content */}
       {loading ? (
         <div className="p-16 flex flex-col items-center justify-center gap-3">
           <RefreshCw className="w-8 h-8 text-[#6366f1] animate-spin" />
-          <span className="font-mono text-xs text-[#908fa0]">Loading category assets...</span>
+          <span className="font-mono text-xs text-[#908fa0]">
+            Loading {categoryName} wallpapers...
+          </span>
         </div>
       ) : categoryWallpapers.length === 0 ? (
-        <div className="p-16 rounded-2xl bg-[#192029] border border-[#2A374A] text-center space-y-3">
-          <h3 className="font-bold text-sm text-[#dce3f0]">No wallpapers in this category</h3>
-          <p className="text-xs text-[#908fa0]">
-            Upload images to populate the {categoryName} feed.
-          </p>
+        <div className="p-16 rounded-xl border border-dashed border-[#2A374A] flex flex-col items-center justify-center gap-3 text-center">
+          <p className="text-sm font-semibold text-[#dce3f0]">No wallpapers found in this category</p>
+          <p className="text-xs text-[#908fa0]">Upload wallpapers to this category or change filter terms.</p>
+          <button
+            onClick={() => navigate(`/upload?category=${rawCategory}`)}
+            className="mt-2 px-4 py-2 rounded-lg bg-[#6366f1] text-white text-xs font-semibold"
+          >
+            Upload Now
+          </button>
         </div>
       ) : (
-        <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {categoryWallpapers.map((wp) => (
             <WallpaperCard
               key={wp.id}
               wallpaper={wp}
               onInspect={(w) => setInspectingWallpaper(w)}
-              onEdit={(w) => setInspectingWallpaper(w)}
               onDelete={(w) => setDeletingWallpaper(w)}
             />
           ))}
         </section>
       )}
 
+      {/* Slide-out Inspector Drawer */}
       {inspectingWallpaper && (
         <WallpaperInspector
           wallpaper={inspectingWallpaper}
@@ -176,13 +215,30 @@ export default function CategoryDetail() {
         />
       )}
 
-      <DeleteModal
-        isOpen={!!deletingWallpaper}
-        wallpaper={deletingWallpaper}
-        onClose={() => setDeletingWallpaper(null)}
-        onConfirm={handleConfirmDelete}
-        loading={deleteLoading}
-      />
+      {/* Delete Confirmation Modal */}
+      {deletingWallpaper && (
+        <DeleteModal
+          isOpen={!!deletingWallpaper}
+          onClose={() => setDeletingWallpaper(null)}
+          onConfirm={handleConfirmDelete}
+          loading={deleteLoading}
+          title="Delete Wallpaper"
+          description={`Are you sure you want to delete "${deletingWallpaper.title || "this wallpaper"}"? This permanently removes the Firestore metadata.`}
+        />
+      )}
+
+      {/* Rename Category Modal */}
+      {renameModalOpen && (
+        <CategoryModal
+          isOpen={renameModalOpen}
+          onClose={() => setRenameModalOpen(false)}
+          onSave={handleRename}
+          initialName={categoryName}
+          title={`Rename Category: ${categoryName}`}
+          actionLabel="Save & Update All Wallpapers"
+          isRename={true}
+        />
+      )}
     </div>
   );
 }

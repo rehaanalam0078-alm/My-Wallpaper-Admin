@@ -1,10 +1,18 @@
+import { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Loader2 } from "lucide-react";
 
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, isAdmin, loading, logout } = useAuth();
   const location = useLocation();
+
+  useEffect(() => {
+    // If authenticated as a consumer user without admin claims, force clean sign-out
+    if (!loading && isAuthenticated && !isAdmin) {
+      logout();
+    }
+  }, [loading, isAuthenticated, isAdmin, logout]);
 
   if (loading) {
     return (
@@ -17,8 +25,17 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  if (!isAuthenticated || !isAdmin) {
+    return (
+      <Navigate
+        to="/login"
+        state={{
+          from: location,
+          unauthorized: isAuthenticated && !isAdmin
+        }}
+        replace
+      />
+    );
   }
 
   return children;
