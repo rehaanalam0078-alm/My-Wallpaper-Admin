@@ -64,6 +64,17 @@ export async function addWallpaperDoc({
   };
 
   const docRef = await addDoc(collection(db, WALLPAPERS_COLLECTION), docPayload);
+
+  // Asynchronously dispatch notifications for genuine new wallpaper creations
+  dispatchNewWallpaperNotification({
+    wallpaperId: docRef.id,
+    imageUrl: docPayload.imageUrl,
+    category: docPayload.category,
+    title: docPayload.title
+  }).catch((err) => {
+    console.warn("[Admin Notification Bridge] Background dispatch error:", err);
+  });
+
   return { id: docRef.id, ...docPayload };
 }
 
@@ -627,3 +638,119 @@ export async function deleteCategory(
 
   return true;
 }
+
+/**
+ * Dispatches in-app notifications to all eligible users when a new wallpaper is created.
+ * Enforces strict idempotency via /events/NEW_WALLPAPER_{wallpaperId}.
+ * Strictly executed ONLY when adding a new wallpaper document.
+ * Edits, featured toggles, and metadata updates never call this function.
+ */
+export async function dispatchNewWallpaperNotification({ wallpaperId, imageUrl, category, title }) {
+  if (!wallpaperId) return;
+
+  const eventKey = `NEW_WALLPAPER_${wallpaperId}`;
+  const eventRef = doc(db, "events", eventKey);
+
+  try {
+    const eventSnap = await getDoc(eventRef);
+    if (eventSnap.exists()) {
+      const data = eventSnap.data();
+      if (data.status === "completed" || data.status === "processing") {
+        console.log(`[Notification Bridge] Wallpaper ${wallpaperId} notification already handled.`);
+        return;
+      }
+    }
+
+    // Set idempotency record immediately
+    await setDoc(eventRef, {
+      wallpaperId,
+      status: "processing",
+      source: "admin_client_bridge",
+      createdAt: serverTimestamp()
+    });
+
+    // Fetch registered users
+    const usersSnap = await getDocs(collection(db, "users"));
+    if (usersSnap.empty) {
+      console.log("[Notification Bridge] No users found in Firestore.");
+      await setDoc(
+        eventRef,
+        { status: "completed", notifiedCount: 0, completedAt: serverTimestamp() },
+        { merge: true }
+      );
+      return;
+    }
+
+    const notifTitle = `New ${category || "Wallpaper"}!`;
+    const notifBody = title
+      ? `Check out "${title}" in ${category || "the gallery"}.`
+      : `Discover the newest wallpaper added to ${category || "our collection"}!`;
+
+    const userDocs = usersSnap.docs;
+    let notifiedCount = 0;
+    const CHUNK_SIZE = 400; // Under Firestore 500 batch limit
+
+    for (let i = 0; i < userDocs.length; i += CHUNK_SIZE) {
+      const chunk = userDocs.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      let batchCount = 0;
+
+      for (const uDoc of chunk) {
+        const uData = uDoc.data() || {};
+        const settings = uData.notificationSettings || {};
+        // Respect user opt-out; default to enabled
+        if (settings.newWallpapers === false) {
+          continue;
+        }
+
+        const notifRef = doc(collection(db, "users", uDoc.id, "notifications"));
+        batch.set(notifRef, {
+          title: notifTitle,
+          body: notifBody,
+          imageUrl: imageUrl || "",
+          wallpaperId: String(wallpaperId),
+          category: String(category || ""),
+          type: "NEW_WALLPAPER",
+          read: false,
+          createdAt: serverTimestamp()
+        });
+        batchCount++;
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+        notifiedCount += batchCount;
+      }
+    }
+
+    await setDoc(
+      eventRef,
+      {
+        status: "completed",
+        notifiedCount,
+        completedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    console.log(
+      `[Notification Bridge] Successfully dispatched in-app notification to ${notifiedCount} users for wallpaper ${wallpaperId}.`
+    );
+  } catch (err) {
+    console.warn(`[Notification Bridge] Error dispatching notification for ${wallpaperId}:`, err);
+    try {
+      await setDoc(
+        eventRef,
+        {
+          status: "error",
+          error: err?.message || String(err),
+          failedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    } catch {
+      // Ignore fallback error
+    }
+  }
+}
+

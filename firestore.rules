@@ -37,10 +37,35 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // 5. Users collection (consumer user profiles if used by mobile app)
-    // - Authenticated consumer users can only read/write their own document
+    // 5. Users collection & subcollections
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Authenticated users can read and write their own profile document;
+      // Admins can read user profiles to inspect notification preferences.
+      allow read: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow write: if request.auth != null && request.auth.uid == userId;
+
+      // User favorites subcollection: strictly owned by the authenticated user
+      match /favorites/{wallpaperId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // User in-app notifications: read, update (mark as read), and delete by owner;
+      // create allowed by admin/server or authenticated owner
+      match /notifications/{notificationId} {
+        allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+        allow create: if isAdmin() || (request.auth != null && request.auth.uid == userId);
+      }
+
+      // User FCM device registration tokens
+      match /fcmTokens/{tokenId} {
+        allow read: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // 6. Internal idempotency events collection (Admin / Cloud Function only)
+    match /events/{eventId} {
+      allow read, write: if isAdmin();
     }
   }
 }
