@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Copy, Check, Sliders, Trash2, Save, Smartphone, Star } from "lucide-react";
+import { X, Copy, Check, Sliders, Trash2, Save, Smartphone, Star, Loader2 } from "lucide-react";
 import { fetchCategories } from "../services/firestoreService";
 import { getCategoryDisplayName, normalizeCategory } from "../services/categoryNormalizer";
 
@@ -39,7 +39,7 @@ export default function WallpaperInspector({
   }, [wallpaper]);
 
   const handleToggleFeatured = async () => {
-    if (!onToggleFeatured) return;
+    if (!onToggleFeatured || togglingFeatured) return;
     setTogglingFeatured(true);
     try {
       const nextVal = !isFeatured;
@@ -102,29 +102,22 @@ export default function WallpaperInspector({
 
       {/* Scrollable Body */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* High-Fidelity 9:16 Mockup Frame */}
-        <div className="relative w-full max-w-[220px] mx-auto aspect-[9/16] rounded-2xl overflow-hidden border-2 border-[#2A374A] shadow-2xl bg-black">
+        {/* Full Image Preview Frame */}
+        <div className="relative aspect-[9/16] max-h-56 mx-auto rounded-xl overflow-hidden bg-[#080f17] border border-[#2A374A] flex items-center justify-center shadow-lg">
           <img
             src={wallpaper.imageUrl}
             alt={title}
             className="w-full h-full object-cover"
           />
-          <div className="absolute top-3 left-3">
-            <span className="px-2 py-0.5 rounded-full bg-[#00885d] text-white font-mono text-[10px] font-bold shadow">
-              ACTIVE ON APP
-            </span>
-          </div>
         </div>
 
         {/* Metadata & Controls */}
         <div className="space-y-4">
-          {/* Document ID with Copy */}
+          {/* Document ID with Quick Copy */}
           <div className="p-3 rounded-lg bg-[#151c25] border border-[#2A374A] flex items-center justify-between">
-            <div className="flex flex-col min-w-0 pr-2">
-              <span className="font-mono text-[10px] text-[#908fa0] uppercase tracking-wider">
-                Firestore Doc ID
-              </span>
-              <span className="font-mono text-xs text-[#c0c1ff] font-semibold truncate">
+            <div className="flex flex-col truncate mr-2">
+              <span className="font-mono text-[10px] text-[#908fa0]">FIRESTORE DOC ID</span>
+              <span className="font-mono text-xs text-[#c0c1ff] font-medium truncate select-all">
                 {wallpaper.id}
               </span>
             </div>
@@ -138,10 +131,12 @@ export default function WallpaperInspector({
           </div>
 
           {/* Featured Hero Toggle Card (High-Priority Placement) */}
-          <div className={`p-3.5 rounded-xl border transition-all ${
+          <div 
+            onClick={handleToggleFeatured}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
             isFeatured
-              ? "bg-[#eab308]/15 border-[#eab308] shadow-lg shadow-[#eab308]/10 ring-1 ring-[#eab308]/40"
-              : "bg-[#151c25] border-[#2A374A] hover:border-[#464554]"
+              ? "bg-[#eab308]/15 border-[#eab308] shadow-lg shadow-[#eab308]/10 ring-1 ring-[#eab308]/40 hover:bg-[#eab308]/20"
+              : "bg-[#151c25] border-[#2A374A] hover:border-[#6366f1]/60 hover:bg-[#192029]"
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -168,15 +163,33 @@ export default function WallpaperInspector({
               </div>
               <button
                 type="button"
-                onClick={handleToggleFeatured}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleFeatured();
+                }}
                 disabled={togglingFeatured}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
                   isFeatured
                     ? "bg-[#eab308] text-black hover:bg-[#ca8a04] shadow-md shadow-[#eab308]/30 font-bold"
                     : "bg-[#6366f1] hover:bg-[#4f46e5] text-white shadow"
                 }`}
               >
-                {togglingFeatured ? "Saving..." : isFeatured ? "Featured" : "Set Featured"}
+                {togglingFeatured ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : isFeatured ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>Featured</span>
+                  </>
+                ) : (
+                  <>
+                    <Star className="w-3.5 h-3.5" />
+                    <span>Set Featured</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, Edit3, Trash2, Check, ExternalLink, Star } from "lucide-react";
+import { Eye, Edit3, Trash2, Check, ExternalLink, Star, Loader2 } from "lucide-react";
 import { getCategoryDisplayName } from "../services/categoryNormalizer";
 
 export default function WallpaperCard({
@@ -13,12 +13,25 @@ export default function WallpaperCard({
 }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [toggling, setToggling] = useState(false);
 
   const displayName = wallpaper.title || wallpaper.filename || "Wallpaper";
   const categoryLabel = getCategoryDisplayName(wallpaper.category);
   const resolution = wallpaper.width && wallpaper.height
     ? `${wallpaper.width} x ${wallpaper.height}`
     : "Portrait HD";
+
+  const handleCardToggleFeatured = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (toggling || !onToggleFeatured) return;
+    setToggling(true);
+    try {
+      await onToggleFeatured(wallpaper);
+    } finally {
+      setToggling(false);
+    }
+  };
 
   return (
     <article
@@ -54,15 +67,15 @@ export default function WallpaperCard({
           />
         )}
 
-        {/* Floating Top Badges & Actions */}
-        <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10 pointer-events-none">
+        {/* Floating Top Badges & Actions (z-30 so it is NEVER blocked by hover overlays) */}
+        <div className="absolute top-3 inset-x-3 flex items-center justify-between z-30 pointer-events-none">
           <div className="flex items-center gap-1.5">
             <span className="px-2.5 py-0.5 rounded-full bg-[#00885d]/30 text-[#4edea3] border border-[#00885d]/60 font-mono text-[11px] backdrop-blur-md flex items-center gap-1.5 shadow">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse" />
               Live
             </span>
             {wallpaper.isFeatured && (
-              <span className="px-2.5 py-0.5 rounded-full bg-[#eab308]/90 text-black border border-[#fef08a] font-mono text-[11px] backdrop-blur-md flex items-center gap-1 shadow-lg font-bold animate-fade-in">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#eab308] text-black border border-[#fef08a] font-mono text-[11px] backdrop-blur-md flex items-center gap-1 shadow-lg font-bold animate-fade-in">
                 <Star className="w-3 h-3 fill-black" />
                 Featured Hero
               </span>
@@ -73,18 +86,20 @@ export default function WallpaperCard({
             {/* Always visible 1-click Featured Hero Toggle */}
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFeatured && onToggleFeatured(wallpaper);
-              }}
-              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+              onClick={handleCardToggleFeatured}
+              disabled={toggling}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
                 wallpaper.isFeatured
                   ? "bg-[#eab308] text-black shadow-lg shadow-[#eab308]/50 ring-2 ring-white/60 scale-105 hover:bg-[#ca8a04]"
-                  : "bg-[#080f17]/75 backdrop-blur-md border border-[#464554] text-[#908fa0] hover:text-[#facc15] hover:border-[#eab308]/70 hover:bg-[#192029]"
+                  : "bg-[#080f17]/80 backdrop-blur-md border border-[#464554] text-[#908fa0] hover:text-[#facc15] hover:border-[#eab308]/70 hover:bg-[#192029]"
               }`}
               title={wallpaper.isFeatured ? "Featured Hero Active (Click to remove)" : "Click to set as Featured Hero"}
             >
-              <Star className={`w-3.5 h-3.5 ${wallpaper.isFeatured ? "fill-black" : "hover:fill-[#facc15]"}`} />
+              {toggling ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[#facc15]" />
+              ) : (
+                <Star className={`w-4 h-4 ${wallpaper.isFeatured ? "fill-black" : "hover:fill-[#facc15]"}`} />
+              )}
             </button>
 
             {onSelect && (
@@ -94,10 +109,10 @@ export default function WallpaperCard({
                   e.stopPropagation();
                   onSelect(wallpaper.id);
                 }}
-                className={`w-7 h-7 rounded-lg flex items-center justify-center shadow transition-colors ${
+                className={`w-8 h-8 rounded-lg flex items-center justify-center shadow transition-colors ${
                   selected
                     ? "bg-[#6366f1] text-white"
-                    : "bg-[#080f17]/75 backdrop-blur-md border border-[#464554] text-transparent hover:border-[#6366f1]"
+                    : "bg-[#080f17]/80 backdrop-blur-md border border-[#464554] text-transparent hover:border-[#6366f1]"
                 }`}
               >
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -106,39 +121,34 @@ export default function WallpaperCard({
           </div>
         </div>
 
-        {/* Hover Action Overlay Scrim */}
-        <div className="absolute inset-0 bg-[#080f17]/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4 gap-2">
-          <div className="flex items-center justify-center gap-2">
+        {/* Hover Action Overlay Scrim (pointer-events-none on backdrop so it never blocks top clicks) */}
+        <div className="absolute inset-0 bg-[#080f17]/70 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4 gap-2 pointer-events-none z-20">
+          <div className="flex items-center justify-center gap-2 pointer-events-auto">
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onToggleFeatured && onToggleFeatured(wallpaper);
+                onInspect && onInspect(wallpaper);
               }}
-              className={`p-2.5 rounded-lg border transition-colors ${
-                wallpaper.isFeatured
-                  ? "bg-[#eab308]/20 border-[#eab308] text-[#facc15] hover:bg-[#eab308]/30"
-                  : "bg-[#232a34] border-[#2A374A] text-[#908fa0] hover:text-[#facc15] hover:border-[#eab308]/50"
-              }`}
-              title={wallpaper.isFeatured ? "Featured Hero (Click to unset)" : "Set as Featured Hero on App"}
-            >
-              <Star className={`w-4 h-4 ${wallpaper.isFeatured ? "fill-[#facc15]" : ""}`} />
-            </button>
-            <button
-              onClick={() => onInspect && onInspect(wallpaper)}
               className="p-2.5 rounded-lg bg-[#232a34] border border-[#2A374A] text-[#dce3f0] hover:bg-[#2e353f] hover:text-white transition-colors"
               title="Inspect Wallpaper"
             >
               <Eye className="w-4 h-4" />
             </button>
             <button
-              onClick={() => onEdit && onEdit(wallpaper)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit && onEdit(wallpaper);
+              }}
               className="p-2.5 rounded-lg bg-[#232a34] border border-[#2A374A] text-[#c0c1ff] hover:bg-[#2e353f] hover:text-[#8083ff] transition-colors"
-              title="Edit Category"
+              title="Edit Category & Title"
             >
               <Edit3 className="w-4 h-4" />
             </button>
             <button
-              onClick={() => onDelete && onDelete(wallpaper)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete && onDelete(wallpaper);
+              }}
               className="p-2.5 rounded-lg bg-[#93000a]/20 border border-[#ffb4ab]/40 text-[#ffb4ab] hover:bg-[#93000a]/50 hover:text-white transition-colors"
               title="Delete Wallpaper"
             >
