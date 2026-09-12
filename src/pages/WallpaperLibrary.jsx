@@ -7,7 +7,8 @@ import {
   Plus,
   Trash2,
   RefreshCw,
-  Eye
+  Eye,
+  Star
 } from "lucide-react";
 import WallpaperCard from "../components/WallpaperCard";
 import WallpaperInspector from "../components/WallpaperInspector";
@@ -16,7 +17,8 @@ import {
   fetchAllWallpapers,
   fetchCategories,
   deleteWallpaperDoc,
-  updateWallpaperDoc
+  updateWallpaperDoc,
+  setFeaturedWallpaper
 } from "../services/firestoreService";
 import {
   normalizeCategory,
@@ -121,6 +123,9 @@ export default function WallpaperLibrary() {
           const timeB = b.timestamp || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
           return timeA - timeB;
         }
+        if (sortBy === "featured") {
+          return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
+        }
         if (sortBy === "category") {
           return (a.category || "").localeCompare(b.category || "");
         }
@@ -162,6 +167,36 @@ export default function WallpaperLibrary() {
   };
 
   // Actions
+  const handleToggleFeatured = async (wallpaper) => {
+    const newStatus = !wallpaper.isFeatured;
+    try {
+      await setFeaturedWallpaper(wallpaper.id, newStatus);
+      success(
+        newStatus
+          ? `"${wallpaper.title || 'Wallpaper'}" is now the Featured Hero on the mobile app!`
+          : `Removed "${wallpaper.title || 'Wallpaper'}" from Featured Hero.`
+      );
+      setWallpapers((prev) =>
+        prev.map((wp) => {
+          if (wp.id === wallpaper.id) {
+            return { ...wp, isFeatured: newStatus };
+          }
+          if (newStatus && wp.isFeatured) {
+            return { ...wp, isFeatured: false };
+          }
+          return wp;
+        })
+      );
+      if (inspectingWallpaper?.id === wallpaper.id) {
+        setInspectingWallpaper((prev) =>
+          prev ? { ...prev, isFeatured: newStatus } : prev
+        );
+      }
+    } catch (err) {
+      error(err.message || "Failed to update Featured status.");
+    }
+  };
+
   const handleSaveInspector = async (docId, updates) => {
     try {
       await updateWallpaperDoc(docId, updates);
@@ -396,6 +431,7 @@ export default function WallpaperLibrary() {
               onInspect={(w) => setInspectingWallpaper(w)}
               onEdit={(w) => setInspectingWallpaper(w)}
               onDelete={(w) => setDeletingWallpaper(w)}
+              onToggleFeatured={handleToggleFeatured}
             />
           ))}
         </section>
@@ -448,6 +484,17 @@ export default function WallpaperLibrary() {
                   </td>
                   <td className="py-2 px-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => handleToggleFeatured(wp)}
+                        className={`p-1.5 rounded transition-colors ${
+                          wp.isFeatured
+                            ? "bg-[#eab308]/20 text-[#facc15]"
+                            : "bg-[#232a34] text-[#908fa0] hover:text-[#facc15]"
+                        }`}
+                        title={wp.isFeatured ? "Featured (Click to unset)" : "Set Featured"}
+                      >
+                        <Star className={`w-3.5 h-3.5 ${wp.isFeatured ? "fill-[#facc15]" : ""}`} />
+                      </button>
                       <button
                         onClick={() => setInspectingWallpaper(wp)}
                         className="p-1.5 rounded bg-[#232a34] text-[#dce3f0] hover:bg-[#2e353f]"
@@ -511,6 +558,7 @@ export default function WallpaperLibrary() {
           onClose={() => setInspectingWallpaper(null)}
           onSaveCategory={handleSaveInspector}
           onDelete={(w) => setDeletingWallpaper(w)}
+          onToggleFeatured={handleToggleFeatured}
         />
       )}
 

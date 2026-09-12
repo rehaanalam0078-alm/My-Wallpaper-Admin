@@ -67,6 +67,31 @@ export async function addWallpaperDoc({
 }
 
 /**
+ * Sets a wallpaper as the single Featured Hero wallpaper on the app home screen.
+ * If isFeatured is true, unsets all other wallpapers currently marked as featured.
+ */
+export async function setFeaturedWallpaper(docId, isFeatured = true) {
+  if (!docId) throw new Error("docId required");
+
+  const batch = writeBatch(db);
+
+  if (isFeatured) {
+    const all = await fetchAllWallpapers();
+    const prevFeatured = all.filter((w) => w.isFeatured && w.id !== docId);
+    for (const prev of prevFeatured) {
+      const prevRef = doc(db, WALLPAPERS_COLLECTION, prev.id);
+      batch.update(prevRef, { isFeatured: false });
+    }
+  }
+
+  const targetRef = doc(db, WALLPAPERS_COLLECTION, docId);
+  batch.update(targetRef, { isFeatured: isFeatured });
+
+  await batch.commit();
+  return { docId, isFeatured };
+}
+
+/**
  * Updates a wallpaper's category and optional title.
  */
 export async function updateWallpaperDoc(docId, updates) {

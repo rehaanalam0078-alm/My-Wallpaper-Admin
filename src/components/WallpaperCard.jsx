@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, Edit3, Trash2, Check, ExternalLink } from "lucide-react";
+import { Eye, Edit3, Trash2, Check, ExternalLink, Star } from "lucide-react";
 import { getCategoryDisplayName } from "../services/categoryNormalizer";
 
 export default function WallpaperCard({
@@ -8,7 +8,8 @@ export default function WallpaperCard({
   onEdit,
   onDelete,
   selected,
-  onSelect
+  onSelect,
+  onToggleFeatured
 }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -52,10 +53,18 @@ export default function WallpaperCard({
 
         {/* Floating Top Badges */}
         <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10 pointer-events-none">
-          <span className="px-2.5 py-0.5 rounded-full bg-[#00885d]/30 text-[#4edea3] border border-[#00885d]/60 font-mono text-[11px] backdrop-blur-md flex items-center gap-1.5 shadow">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse" />
-            Live
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#00885d]/30 text-[#4edea3] border border-[#00885d]/60 font-mono text-[11px] backdrop-blur-md flex items-center gap-1.5 shadow">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse" />
+              Live
+            </span>
+            {wallpaper.isFeatured && (
+              <span className="px-2.5 py-0.5 rounded-full bg-[#eab308]/40 text-[#facc15] border border-[#eab308]/80 font-mono text-[11px] backdrop-blur-md flex items-center gap-1 shadow font-bold">
+                <Star className="w-3 h-3 fill-[#facc15]" />
+                Featured
+              </span>
+            )}
+          </div>
 
           {onSelect && (
             <button
@@ -78,6 +87,20 @@ export default function WallpaperCard({
         {/* Hover Action Overlay Scrim */}
         <div className="absolute inset-0 bg-[#080f17]/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4 gap-2">
           <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFeatured && onToggleFeatured(wallpaper);
+              }}
+              className={`p-2.5 rounded-lg border transition-colors ${
+                wallpaper.isFeatured
+                  ? "bg-[#eab308]/20 border-[#eab308] text-[#facc15] hover:bg-[#eab308]/30"
+                  : "bg-[#232a34] border-[#2A374A] text-[#908fa0] hover:text-[#facc15] hover:border-[#eab308]/50"
+              }`}
+              title={wallpaper.isFeatured ? "Featured Hero (Click to unset)" : "Set as Featured Hero on App"}
+            >
+              <Star className={`w-4 h-4 ${wallpaper.isFeatured ? "fill-[#facc15]" : ""}`} />
+            </button>
             <button
               onClick={() => onInspect && onInspect(wallpaper)}
               className="p-2.5 rounded-lg bg-[#232a34] border border-[#2A374A] text-[#dce3f0] hover:bg-[#2e353f] hover:text-white transition-colors"
